@@ -152,7 +152,7 @@ table.pnl tr.total-row td.col-avg { background:#d8e8f8; }
 <div id="upload-screen">
   <div class="upload-eyebrow">📊 CD Analytics</div>
   <h1 class="upload-title">CD By Day Dashboard</h1>
-  <p class="upload-sub">Upload your workbook to instantly visualize contribution margin, MER, breakeven, and all key metrics.</p>
+  <p class="upload-sub">The dashboard auto-loads the latest data. You can also upload a local file manually below.</p>
   <div class="drop-zone" id="drop-zone">
     <input type="file" id="file-input" accept=".xlsx,.xls">
     <div class="drop-icon">📂</div>
@@ -162,7 +162,7 @@ table.pnl tr.total-row td.col-avg { background:#d8e8f8; }
   <div id="upload-error"></div>
 </div>
 
-<div id="loading-msg">⚙ Parsing workbook…</div>
+<div id="loading-msg"><div style="padding:80px;text-align:center;font-family:'IBM Plex Mono',monospace;color:#8a96a8;font-size:.85rem;">⚙ Loading latest data…</div></div>
 
 <div id="dashboard">
   <div class="top-bar">
@@ -170,7 +170,7 @@ table.pnl tr.total-row td.col-avg { background:#d8e8f8; }
       <div class="brand">CD<span>.</span>Analytics</div>
       <div class="file-badge" id="file-name-badge">—</div>
     </div>
-    <button class="reupload-btn" id="reupload-btn">↑ Upload New File</button>
+    <button class="reupload-btn" id="reupload-btn">↑ Upload Different File</button>
   </div>
 
   <div class="controls-bar">
@@ -580,12 +580,41 @@ function parseWorkbook(ab,filename){
 }
 
 function handleFile(f){if(!f)return;const r=new FileReader();r.onload=e=>parseWorkbook(new Uint8Array(e.target.result),f.name);r.readAsArrayBuffer(f);}
+
+/* AUTO-LOAD FROM GOOGLE DRIVE */
+const GDRIVE_FILE_ID='1cu8IRgbiXTHa0fGgTHrm3uGQJDaxWnK-';
+const GDRIVE_URL=`https://drive.google.com/uc?export=download&id=${GDRIVE_FILE_ID}`;
+const CORS_PROXY='https://corsproxy.io/?';
+
+async function autoLoadDrive(){
+  $('loading-msg').style.display='block';
+  $('upload-screen').style.display='none';
+  try{
+    const res=await fetch(CORS_PROXY+encodeURIComponent(GDRIVE_URL));
+    if(!res.ok)throw new Error('Could not fetch file (status '+res.status+')');
+    const ab=await res.arrayBuffer();
+    parseWorkbook(new Uint8Array(ab),'CD_by_Day.xlsx');
+  }catch(e){
+    console.error('Auto-load failed:',e);
+    $('loading-msg').style.display='none';
+    $('upload-screen').style.display='flex';
+    $('upload-error').style.display='block';
+    $('upload-error').textContent='⚠ Could not auto-load data. Please upload the file manually.';
+  }
+}
+
+autoLoadDrive();
 $('file-input').addEventListener('change',e=>handleFile(e.target.files[0]));
 const dz=$('drop-zone');
 dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag-over');});
 dz.addEventListener('dragleave',()=>dz.classList.remove('drag-over'));
 dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag-over');handleFile(e.dataTransfer.files[0]);});
-$('reupload-btn').addEventListener('click',()=>{$('dashboard').style.display='none';$('upload-screen').style.display='flex';RAW=null;});
+$('reupload-btn').addEventListener('click',()=>{
+  // try re-fetching from Drive first; fall back to upload screen
+  RAW=null;
+  $('dashboard').style.display='none';
+  autoLoadDrive().catch(()=>{$('upload-screen').style.display='flex';});
+});
 document.querySelectorAll('.range-btn').forEach(btn=>{btn.addEventListener('click',()=>{document.querySelectorAll('.range-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');setDateRange(parseInt(btn.dataset.days));render();});});
 $('date-from').addEventListener('change',()=>{document.querySelectorAll('.range-btn').forEach(b=>b.classList.remove('active'));render();});
 $('date-to').addEventListener('change',()=>{document.querySelectorAll('.range-btn').forEach(b=>b.classList.remove('active'));render();});
